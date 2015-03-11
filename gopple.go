@@ -62,7 +62,7 @@ func createThumbnail(img image.Image) string {
 	return thumbhash
 }
 
-func handleImage(path string) (string, string, string, error) {
+func handleImage(path string, f os.FileInfo, mimetype string) {
 	file, err := os.Open(path)
 	checkErr(err)
 	defer file.Close()
@@ -75,7 +75,11 @@ func handleImage(path string) (string, string, string, error) {
 	thumbhash := createThumbnail(img)
 
 	resolution := fmt.Sprintf("%dx%d", x, y)
-	return hash, thumbhash, resolution, nil
+
+	//addImage(path, f, mimetype, hash, thumbhash, resolution)
+
+	l := fmt.Sprintf("%s -> %s :: %s @ %s\n", path, hash, thumbhash, resolution)
+	fmt.Printf(l)
 }
 
 // Gets the path of images within the directory
@@ -86,8 +90,7 @@ func walkpath(path string, f os.FileInfo, err error) error {
 	mi, err := mm.TypeByFile(path)
 	if err == nil {
 		if mi == "image/jpeg" || mi == "image/png" || mi == "image/gif" {
-			hash, thumbhash, res, _ := handleImage(path)
-			fmt.Printf("%s -> %s :: %s @ %s\n", path, hash, thumbhash, res)
+			handleImage(path, f, mi)
 		}
 	}
 	return nil
@@ -101,10 +104,9 @@ func checkErr(err error) {
 }
 
 func main() {
-	thumbdir := "./thumbs"
+	thumbdir = ".thumbs"
 	// Open connection to DB
-	db, err := sql.Open("sqlite3", "./gopple.db")
-	checkErr(err)
+	db, _ = sql.Open("sqlite3", "./gopple.db")
 
 	// Walk directory to get list of images
 	root := "./"
