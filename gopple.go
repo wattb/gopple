@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"database/sql"
-	"errors"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/nfnt/resize"
@@ -14,7 +12,7 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
-	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -73,20 +71,21 @@ func createThumbnail(img image.Image) string {
 }
 
 func handleImage(path string, f os.FileInfo, mimetype string) {
-	file, err := os.Open(path)
+	buf := new(bytes.Buffer)
+	buf2 := new(bytes.Buffer)
+	file, err := ioutil.ReadFile(path)
 	if err != nil {
-		lo := fmt.Sprintf("%s -> %s", path, err)
-		log.Fatal(lo)
-		file.Close()
+		log.Printf("%s -> %s\n", path, err)
 		panic(err)
 	}
-	img, format, err1 := Decode(file)
-	im, _, err2 := DecodeConfig(file)
+	buf.Write(file)
+	buf2.Write(file)
+	img, format, err1 := image.Decode(buf)
+	im, _, err2 := image.DecodeConfig(buf2)
 	if err1 != nil || err2 != nil {
-		lo := fmt.Sprintf("%s -> %s, %s", path, err1, err2)
-		log.Fatal(lo)
+		log.Printf("%s\n -> err1:%s\n -> err2:%s\n", path, err1, err2)
+		panic(err1)
 	}
-	defer file.Close()
 
 	x := im.Width
 	y := im.Height
@@ -136,99 +135,7 @@ func main() {
 	root := "./"
 
 	filepath.Walk(root, walkpath)
-	for n, i := range images {
-		fmt.Printf("%d:: %s %s\n", n, i.path, i.mimetype)
-		go handleImage(i.path, i.info, i.mimetype)
+	for _, i := range images {
+		handleImage(i.path, i.info, i.mimetype)
 	}
-}
-
-// ErrFormat indicates that decoding encountered an unknown format.
-var ErrFormat = errors.New("image: unknown format")
-
-// A format holds an image format's name, magic header and how to decode it.
-type format struct {
-	name, magic  string
-	decode       func(io.Reader) (image.Image, error)
-	decodeConfig func(io.Reader) (image.Config, error)
-}
-
-// Formats is the list of registered formats.
-var formats []format
-
-// RegisterFormat registers an image format for use by Decode.
-// Name is the name of the format, like "jpeg" or "png".
-// Magic is the magic prefix that identifies the format's encoding. The magic
-// string can contain "?" wildcards that each match any one byte.
-// Decode is the function that decodes the encoded image.
-// DecodeConfig is the function that decodes just its configuration.
-func RegisterFormat(name, magic string, decode func(io.Reader) (image.Image, error), decodeConfig func(io.Reader) (image.Config, error)) {
-	formats = append(formats, format{name, magic, decode, decodeConfig})
-}
-
-// A reader is an io.Reader that can also peek ahead.
-type reader interface {
-	io.Reader
-	Peek(int) ([]byte, error)
-}
-
-// asReader converts an io.Reader to a reader.
-func asReader(r io.Reader) reader {
-	if rr, ok := r.(reader); ok {
-		return rr
-	}
-	return bufio.NewReader(r)
-}
-
-// Match reports whether magic matches b. Magic may contain "?" wildcards.
-func match(magic string, b []byte) bool {
-	if len(magic) != len(b) {
-		return false
-	}
-	for i, c := range b {
-		if magic[i] != c && magic[i] != '?' {
-			return false
-		}
-	}
-	return true
-}
-
-// Sniff determines the format of r's data.
-func sniff(r reader) (format, error) {
-	for _, f := range formats {
-		b, err := r.Peek(len(f.magic))
-		if err == nil && match(f.magic, b) {
-			return f, nil
-		} else {
-			return format{}, err
-		}
-	}
-	return format{}, nil
-}
-
-// Decode decodes an image that has been encoded in a registered format.
-// The string returned is the format name used during format registration.
-// Format registration is typically done by an init function in the codec-
-// specific package.
-func Decode(r io.Reader) (image.Image, string, error) {
-	rr := asReader(r)
-	f, err := sniff(rr)
-	if err != nil || f.decode == nil {
-		return nil, "", err
-	}
-	m, _ := f.decode(rr)
-	return m, f.name, err
-}
-
-// DecodeConfig decodes the color model and dimensions of an image that has
-// been encoded in a registered format. The string returned is the format name
-// used during format registration. Format registration is typically done by
-// an init function in the codec-specific package.
-func DecodeConfig(r io.Reader) (image.Config, string, error) {
-	rr := asReader(r)
-	f, err := sniff(rr)
-	if err != nil || f.decodeConfig == nil {
-		return image.Config{}, "", err
-	}
-	c, err := f.decodeConfig(rr)
-	return c, f.name, err
 }
