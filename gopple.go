@@ -16,7 +16,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 var db *sql.DB
@@ -136,15 +135,8 @@ func main() {
 	root := "./"
 
 	filepath.Walk(root, walkpath)
-	var wg sync.WaitGroup
 	for _, i := range images {
-		i := i
-		wg.Add(1)
-		go func(i imageInfo) {
-			handleImage(i.path, i.info, i.mimetype)
-			defer wg.Done()
-		}(i)
+		handleImage(i.path, i.info, i.mimetype)
 	}
-	wg.Wait()
 	fmt.Printf("Done!\n")
 }
