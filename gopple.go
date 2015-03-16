@@ -144,7 +144,7 @@ func main() {
 			handleImage(i.path, i.info, i.mimetype)
 			defer wg.Done()
 		}(i)
-		wg.Wait()
 	}
+	wg.Wait()
 	fmt.Printf("Done!\n")
 }
